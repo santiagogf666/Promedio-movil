@@ -1,0 +1,43 @@
+/* custom application styles */
+
+body {
+    background-color: #f0f2f5;
+    color: #333;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* header */
+h1 {
+    color: #060707;
+    text-align: center;
+}
+
+/* flash messages */
+.alert-warning {
+    background-color: #fff3cd;
+    border-color: #ffeeba;
+    color: #856404;
+}
+
+/* tables */
+.table {
+    background-color: #ffffff;
+}
+.table th {
+    background-color: #e9ecef;
+}
+
+/* form inputs */
+.form-control, .form-control-file {
+    max-width: 400px;
+}
+
+/* buttons */
+.btn-primary {
+    background-color: #0069d9;
+    border-color: #0062cc;
+}
+.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #004085;
+}

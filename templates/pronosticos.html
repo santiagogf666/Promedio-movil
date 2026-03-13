@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Pronóstico con Promedio Móvil</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <!-- custom styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body class="p-4">
+    <div class="container">
+        <h1 class="mb-4">Pronóstico de promedio móvil</h1>
+
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <div class="alert alert-warning">
+              {% for message in messages %}
+                <p>{{ message }}</p>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        <form method="post" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="csv_file">Archivo CSV</label>
+                <input type="file" class="form-control-file" id="csv_file" name="csv_file" required>
+            </div>
+            <div class="form-group">
+                <label for="column">Columna (nombre)</label>
+                <input type="text" class="form-control" id="column" name="column" 
+                       value="{{ results.selected_column if results }}" required
+                       placeholder="Escriba el nombre exacto de la columna">
+                {% if columns %}
+                    <small class="form-text text-muted">
+                        Columnas disponibles: {{ columns | join(', ') }}
+                    </small>
+                {% endif %}
+            </div>
+            <div class="form-group">
+                <label for="n">Ventana (n)</label>
+                <input type="number" class="form-control" id="n" name="n" value="{{ results.n if results }}" required min="1">
+            </div>
+            <button type="submit" class="btn btn-primary">Calcular</button>
+        </form>
+
+        {% if results %}
+            <hr>
+            <h2>Resultados</h2>
+            <p>Columna seleccionada: <strong>{{ results.selected_column }}</strong></p>
+            <p>Ventana n: <strong>{{ results.n }}</strong></p>
+
+            <h3>Medidas de error</h3>
+            <ul>
+                {% for name, value in results.stats.items() %}
+                    <li>{{ name }}: {{ "%.4f"|format(value) }}</li>
+                {% endfor %}
+            </ul>
+
+            {% if results.plot_image %}
+                <h3>Gráfico de HISTÓRICO VS PRONÓSTICO</h3>
+                <div class="mb-4">
+                    <img src="data:image/png;base64,{{ results.plot_image }}" class="img-fluid" alt="Gráfico de serie histórica y pronóstico">
+                </div>
+            {% endif %}
+
+            <h3>Data con pronóstico</h3>
+            <div class="table-responsive">
+                {{ results.forecast_table | safe }}
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>
