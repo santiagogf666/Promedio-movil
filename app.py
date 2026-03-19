@@ -83,7 +83,7 @@ def modelo():
             return redirect(request.url)
 
         try:
-            df = pd.read_csv(file)
+            df = pd.read_csv(file,header=0)
         except Exception as e:
             flash(f'No se pudo leer el CSV: {e}')
             return redirect(request.url)
