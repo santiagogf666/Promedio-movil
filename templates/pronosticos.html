@@ -2,73 +2,863 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Pronóstico con Promedio Móvil</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔮 Herramienta de Pronósticos Inteligente</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <!-- custom styles -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .results-container {
+            display: none;
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
 </head>
-<body class="p-4">
-    <div class="container">
-        <h1 class="mb-4">Pronóstico de promedio móvil</h1>
+<body>
+    <!-- Header con gradiente animado -->
+    <div class="hero-section">
+        <div class="hero-content">
+            <div class="hero-icon">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <h1 class="hero-title">Herramienta de Pronósticos Inteligente</h1>
+            <p class="hero-subtitle">Análisis predictivo avanzado con pronósticos para tus datos</p>
+        </div>
+        <div class="hero-bg-shape shape-1"></div>
+        <div class="hero-bg-shape shape-2"></div>
+        <div class="hero-bg-shape shape-3"></div>
+    </div>
 
+    <div class="container">
         {% with messages = get_flashed_messages() %}
           {% if messages %}
-            <div class="alert alert-warning">
+            <div class="alert alert-custom alert-warning fade-in" id="flash-messages">
+              <i class="fas fa-exclamation-triangle"></i>
               {% for message in messages %}
-                <p>{{ message }}</p>
+                <span>{{ message }}</span>
               {% endfor %}
             </div>
           {% endif %}
         {% endwith %}
 
-        <form method="post" enctype="multipart/form-data">
-            <div class="form-group">
-                <label for="csv_file">Archivo CSV</label>
-                <input type="file" class="form-control-file" id="csv_file" name="csv_file" required>
+        <!-- SECCIÓN DE CARGA DE CSV -->
+        <div class="card upload-card fade-in">
+            <div class="card-header">
+                <i class="fas fa-upload"></i>
+                <h5 class="mb-0">1. Cargar Datos</h5>
             </div>
-            <div class="form-group">
-                <label for="column">Columna (nombre)</label>
-                <input type="text" class="form-control" id="column" name="column" 
-                       value="{{ results.selected_column if results }}" required
-                       placeholder="Escriba el nombre exacto de la columna">
-                {% if columns %}
-                    <small class="form-text text-muted">
-                        Columnas disponibles: {{ columns | join(', ') }}
-                    </small>
-                {% endif %}
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" id="upload-form">
+                    <div class="form-group">
+                        <label for="csv_file" class="form-label">
+                            <i class="fas fa-file-csv"></i>
+                            Seleccionar archivo CSV
+                        </label>
+                        <div class="file-input-wrapper">
+                            <input type="file" class="form-control-file" id="csv_file" name="csv_file" accept=".csv" required>
+                            <div class="file-input-overlay">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <span>Haz clic para seleccionar o arrastra tu archivo aquí</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="initial_method" class="form-label">
+                            <i class="fas fa-cogs"></i>
+                            Método de pronóstico inicial
+                        </label>
+                        <select class="form-control custom-select" id="initial_method" name="method" required>
+                            <option value="moving_average">📊 Promedio Móvil</option>
+                            <option value="exponential_smoothing">📈 Suavización Exponencial</option>
+                            <option value="prophet">🔮 Prophet (IA)</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg btn-upload">
+                        <i class="fas fa-rocket"></i>
+                        Iniciar Análisis
+                    </button>
+                </form>
             </div>
-            <div class="form-group">
-                <label for="n">Ventana (n)</label>
-                <input type="number" class="form-control" id="n" name="n" value="{{ results.n if results }}" required min="1">
-            </div>
-            <button type="submit" class="btn btn-primary">Calcular</button>
-        </form>
+        </div>
+        </div>
 
+        <!-- SECCIÓN DE CONTROLES INTERACTIVOS -->
+        <div id="controls-section" class="card controls-card fade-in" style="display: none;">
+            <div class="card-header">
+                <i class="fas fa-sliders-h"></i>
+                <h5 class="mb-0">2. Configurar Análisis</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="interactive_column" class="form-label">
+                                <i class="fas fa-chart-bar"></i>
+                                Columna a Pronosticar
+                            </label>
+                            <select class="form-control custom-select" id="interactive_column" name="column">
+                                <option value="">Seleccione una columna</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="interactive_method" class="form-label">
+                                <i class="fas fa-brain"></i>
+                                Método de Pronóstico
+                            </label>
+                            <select class="form-control custom-select" id="interactive_method" name="method">
+                                <option value="moving_average">📊 Promedio Móvil</option>
+                                <option value="exponential_smoothing">📈 Suavización Exponencial</option>
+                                <option value="prophet">🔮 Prophet (IA)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="interactive_date_column" class="form-label">
+                                <i class="fas fa-calendar-alt"></i>
+                                Columna de Fecha (opcional)
+                            </label>
+                            <select class="form-control custom-select" id="interactive_date_column" name="date_column">
+                                <option value="">Sin columna de fecha</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group" id="n_group" style="display: none;">
+                            <label for="interactive_n" class="form-label">
+                                <i class="fas fa-window-maximize"></i>
+                                Ventana (n) para Promedio Móvil
+                            </label>
+                            <input type="number" class="form-control" id="interactive_n" name="n" value="3" min="1" max="20">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="interactive_end_date" class="form-label">
+                        <i class="fas fa-calendar-plus"></i>
+                        Fecha de Proyección Final (opcional)
+                    </label>
+                    <input type="date" class="form-control" id="interactive_end_date" name="end_date">
+                </div>
+
+                <div class="text-center">
+                    <button type="button" class="btn btn-outline-secondary btn-reset" id="reset-btn">
+                        <i class="fas fa-redo"></i>
+                        Cargar otro archivo
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- INDICADOR DE CARGA -->
+        <div class="loading fade-in" id="loading">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <h4>Procesando análisis...</h4>
+                <p class="text-muted">Aplicando algoritmos para generar pronósticos precisos</p>
+            </div>
+        </div>
+
+        <!-- SECCIÓN DE RESULTADOS -->
+        <div id="results-section" class="results-container fade-in">
+            <!-- Información del análisis -->
+            <div class="card result-info-card">
+                <div class="card-body">
+                    <div class="result-info-header">
+                        <i class="fas fa-info-circle"></i>
+                        <h5 class="mb-0">Información del Análisis</h5>
+                    </div>
+                    <div id="result-info" class="result-info-content"></div>
+                </div>
+            </div>
+
+            <!-- Tabla resumen de métodos -->
+            <div class="card summary-card">
+                <div class="card-header">
+                    <i class="fas fa-table"></i>
+                    <h5 class="mb-0">Comparación de Métodos</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table id="summary-table" class="table table-hover"></table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gráfico principal -->
+            <div class="card chart-card">
+                <div class="card-header">
+                    <i class="fas fa-chart-line"></i>
+                    <h5 id="selected-plot-title" class="mb-0">Gráfico de Pronóstico</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <img id="plot-image-selected" src="" class="img-fluid chart-image" alt="Gráfico de serie histórica y pronóstico">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Otros gráficos -->
+            <div id="other-plots-section"></div>
+
+            <!-- Tabla de datos con pronóstico -->
+            <div class="card forecast-table-card">
+                <div class="card-header">
+                    <i class="fas fa-database"></i>
+                    <h5 class="mb-0">Datos con Pronóstico</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table id="forecast-table" class="table table-hover table-striped"></table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <p>&copy; 2024 Herramienta de Pronósticos Inteligente. <i class="fas fa-heart text-danger"></i></p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        // Variables globales
+        let columnsAvailable = [];
+        let csvLoaded = false;
+
+        // Event listeners
+        document.getElementById('upload-form').addEventListener('submit', handleUpload);
+        document.getElementById('interactive_column').addEventListener('change', analyzeColumn);
+        document.getElementById('interactive_method').addEventListener('change', analyzeColumn);
+        document.getElementById('interactive_date_column').addEventListener('change', analyzeColumn);
+        document.getElementById('interactive_n').addEventListener('change', analyzeColumn);
+        document.getElementById('interactive_end_date').addEventListener('change', analyzeColumn);
+        document.getElementById('interactive_method').addEventListener('change', toggleNGroup);
+        document.getElementById('reset-btn').addEventListener('click', resetApp);
+
+        // Mostrar/ocultar grupo N según método
+        function toggleNGroup() {
+            const method = document.getElementById('interactive_method').value;
+            const nGroup = document.getElementById('n_group');
+            nGroup.style.display = (method === 'moving_average') ? 'block' : 'none';
+        }
+
+        // Manejar carga de CSV
+        function handleUpload(e) {
+            e.preventDefault();
+            const form = document.getElementById('upload-form');
+            const formData = new FormData(form);
+
+            showLoading();
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/', true);
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    csvLoaded = true;
+                    document.getElementById('upload-form').parentElement.style.display = 'none';
+                    document.getElementById('controls-section').style.display = 'block';
+                    document.getElementById('results-section').style.display = 'block';
+
+                    // Obtener columnas desde el API
+                    fetch('/api/get-columns')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.columns) {
+                                columnsAvailable = data.columns;
+                                populateSelects(columnsAvailable);
+
+                                // Realizar análisis inicial
+                                const method = document.getElementById('initial_method').value;
+                                document.getElementById('interactive_method').value = method;
+                                analyzeColumn();
+                            } else {
+                                hideLoading();
+                                showError('Error al obtener columnas: ' + (data.error || 'unknown error'));
+                            }
+                        })
+                        .catch(error => {
+                            hideLoading();
+                            showError('Error al conectar: ' + error.message);
+                        });
+                } else {
+                    hideLoading();
+                    showError('Error al cargar el archivo');
+                }
+            };
+
+            xhr.onerror = function() {
+                hideLoading();
+                showError('Error al cargar el archivo');
+            };
+
+            xhr.send(formData);
+        }
+
+        // Poblar selects con columnas disponibles
+        function populateSelects(columns) {
+            const columnSelect = document.getElementById('interactive_column');
+            const dateSelect = document.getElementById('interactive_date_column');
+
+            // Limpiar opciones
+            columnSelect.innerHTML = '<option value="">Seleccione una columna</option>';
+            dateSelect.innerHTML = '<option value="">Sin columna de fecha</option>';
+
+            let dateColumnFound = null;
+            columns.forEach(col => {
+                const opt1 = document.createElement('option');
+                opt1.value = col;
+                opt1.textContent = col;
+                columnSelect.appendChild(opt1);
+
+                const opt2 = document.createElement('option');
+                opt2.value = col;
+                opt2.textContent = col;
+                dateSelect.appendChild(opt2);
+
+                // Detectar columnas que podrían ser fechas por su nombre
+                if (!dateColumnFound && (col.toLowerCase().includes('fecha') || col.toLowerCase().includes('date') || col.toLowerCase().includes('time'))) {
+                    dateColumnFound = col;
+                }
+            });
+
+            // Seleccionar primera columna por defecto
+            if (columns.length > 0) {
+                columnSelect.value = columns[0];
+                // Si se encontró columna de fecha, seleccionarla
+                if (dateColumnFound) {
+                    dateSelect.value = dateColumnFound;
+                }
+            }
+
+            // Establecer fecha de proyección futura (30 días adelante)
+            const today = new Date();
+            const futureDate = new Date(today);
+            futureDate.setDate(futureDate.getDate() + 30);
+            const futureDateStr = futureDate.toISOString().split('T')[0];
+            document.getElementById('interactive_end_date').value = futureDateStr;
+        }
+
+        // Analizar columna seleccionada (AJAX)
+        function analyzeColumn() {
+            if (!csvLoaded) return;
+
+            const column = document.getElementById('interactive_column').value;
+            if (!column) return;
+
+            const method = document.getElementById('interactive_method').value;
+            const dateColumn = document.getElementById('interactive_date_column').value;
+            const endDate = document.getElementById('interactive_end_date').value;
+            const n = document.getElementById('interactive_n').value;
+
+            showLoading();
+
+            // Limpiar errores anteriores
+            const errorAlerts = document.querySelectorAll('#results-section .alert-danger');
+            errorAlerts.forEach(alert => alert.remove());
+
+            fetch('/api/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    column: column,
+                    method: method,
+                    date_column: dateColumn,
+                    end_date: endDate,
+                    n: n
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.error) {
+                    showError(data.error);
+                } else {
+                    displayResults(data);
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showError('Error al procesar: ' + error.message);
+            });
+        }
+
+        // Mostrar resultados
+        function displayResults(data) {
+            // Información
+            let infoHtml = `
+                <div class="info-item">
+                    <i class="fas fa-brain"></i>
+                    <span><strong>Método:</strong> ${data.selected_method_label}</span>
+                </div>
+                <div class="info-item">
+                    <i class="fas fa-chart-bar"></i>
+                    <span><strong>Columna:</strong> ${data.selected_column}</span>
+                </div>
+            `;
+            if (data.date_column) {
+                infoHtml += `
+                    <div class="info-item">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span><strong>Fecha:</strong> ${data.date_column}</span>
+                    </div>
+                `;
+                if (data.date_column_type && data.date_column_type.is_date) {
+                    infoHtml += `<span class="badge badge-info ml-2">${data.date_column_type.message}</span>`;
+                }
+            }
+            document.getElementById('result-info').innerHTML = infoHtml;
+
+            // Tabla resumen
+            document.getElementById('summary-table').innerHTML = data.summary_table;
+
+            // Título del gráfico
+            document.getElementById('selected-plot-title').textContent =
+                `Gráfico de Pronóstico (${data.selected_method_label})`;
+
+            // Gráfico seleccionado
+            if (data.plot_image_selected) {
+                document.getElementById('plot-image-selected').src =
+                    'data:image/png;base64,' + data.plot_image_selected;
+            }
+
+            // Otros gráficos
+            let otherPlotsHtml = '';
+            if (data.plot_image_others && Object.keys(data.plot_image_others).length > 0) {
+                otherPlotsHtml = '<div class="card other-plots-card"><div class="card-header"><i class="fas fa-chart-area"></i><h5 class="mb-0">Gráficos de Métodos Adicionales</h5></div><div class="card-body">';
+                for (let methodName in data.plot_image_others) {
+                    otherPlotsHtml += `
+                        <div class="other-plot-item">
+                            <h6>${methodName}</h6>
+                            <div class="chart-container">
+                                <img src="data:image/png;base64,${data.plot_image_others[methodName]}"
+                                     class="img-fluid chart-image" alt="Gráfico de ${methodName}">
+                            </div>
+                        </div>
+                    `;
+                }
+                otherPlotsHtml += '</div></div>';
+            }
+            document.getElementById('other-plots-section').innerHTML = otherPlotsHtml;
+
+            // Tabla de pronóstico
+            document.getElementById('forecast-table').innerHTML = data.forecast_table;
+        }
+
+        // Mostrar/ocultar indicador de carga
+        function showLoading() {
+            document.getElementById('loading').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // Mostrar error
+        function showError(message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-custom alert-danger fade-in';
+            alertDiv.innerHTML = `
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>${message}</span>
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            `;
+            document.getElementById('results-section').insertBefore(
+                alertDiv,
+                document.getElementById('result-info').parentElement.parentElement
+            );
+        }
+
+        // Resetear aplicación
+        function resetApp() {
+            csvLoaded = false;
+            columnsAvailable = [];
+            document.querySelector('.upload-card').style.display = 'block';
+            document.getElementById('controls-section').style.display = 'none';
+            document.getElementById('results-section').style.display = 'none';
+            document.getElementById('csv_file').value = '';
+            document.getElementById('upload-form').reset();
+        }
+
+        // Inicialización
         {% if results %}
+            csvLoaded = true;
+            columnsAvailable = {{ results.columns | tojson }};
+            document.querySelector('.upload-card').style.display = 'none';
+            document.getElementById('controls-section').style.display = 'block';
+            document.getElementById('results-section').style.display = 'block';
+            populateSelects(columnsAvailable);
+            document.getElementById('interactive_column').value = '{{ results.selected_column }}';
+            document.getElementById('interactive_method').value = '{{ results.selected_method }}';
+            document.getElementById('interactive_date_column').value = '{{ results.date_column or "" }}';
+            document.getElementById('interactive_n').value = '{{ results.n or 3 }}';
+            document.getElementById('interactive_end_date').value = '{{ results.end_date or "" }}';
+            toggleNGroup();
+            displayResults({{ results | tojson }});
+        {% endif %}
+    </script>
+</body>
+</html>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group" id="n_group" style="display: none;">
+                        <label for="interactive_n"><strong>Ventana (n) para Promedio Móvil</strong></label>
+                        <input type="number" class="form-control" id="interactive_n" name="n" value="3" min="1" max="20">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="interactive_end_date"><strong>Fecha de Proyección Final (opcional)</strong></label>
+                <input type="date" class="form-control" id="interactive_end_date" name="end_date">
+            </div>
+
+            <button type="button" class="btn btn-secondary" id="reset-btn">Cargar otro archivo</button>
+        </div>
+
+        <!-- INDICADOR DE CARGA -->
+        <div class="loading" id="loading">
+            <div class="spinner">
+                <div class="spinner-border text-primary mr-2" role="status">
+                    <span class="sr-only">Cargando...</span>
+                </div>
+                <span>Procesando análisis...</span>
+            </div>
+        </div>
+
+        <!-- SECCIÓN DE RESULTADOS -->
+        <div id="results-section" class="results-container">
             <hr>
             <h2>Resultados</h2>
-            <p>Columna seleccionada: <strong>{{ results.selected_column }}</strong></p>
-            <p>Ventana n: <strong>{{ results.n }}</strong></p>
+            
+            <div id="result-info" class="alert alert-info"></div>
 
-            <h3>Medidas de error</h3>
-            <ul>
-                {% for name, value in results.stats.items() %}
-                    <li>{{ name }}: {{ "%.4f"|format(value) }}</li>
-                {% endfor %}
-            </ul>
-
-            {% if results.plot_image %}
-                <h3>Gráfico de HISTÓRICO VS PRONÓSTICO</h3>
-                <div class="mb-4">
-                    <img src="data:image/png;base64,{{ results.plot_image }}" class="img-fluid" alt="Gráfico de serie histórica y pronóstico">
-                </div>
-            {% endif %}
-
-            <h3>Data con pronóstico</h3>
+            <h3>Tabla Resumen de Métodos</h3>
             <div class="table-responsive">
-                {{ results.forecast_table | safe }}
+                <table id="summary-table" class="table table-sm"></table>
             </div>
-        {% endif %}
+
+            <h3 id="selected-plot-title" style="margin-top: 40px;">Gráfico Seleccionado</h3>
+            <div class="mb-4">
+                <img id="plot-image-selected" src="" class="img-fluid" alt="Gráfico de serie histórica y pronóstico seleccionado" style="max-width: 100%; height: auto;">
+            </div>
+
+            <div id="other-plots-section"></div>
+
+            <h3 style="margin-top: 40px;">Datos con Pronóstico</h3>
+            <div class="table-responsive">
+                <table id="forecast-table" class="table table-sm"></table>
+            </div>
+        </div>
     </div>
+
+    <script>
+        // Variables globales
+        let columnsAvailable = [];
+        let csvLoaded = false;
+
+        // Event listeners
+        document.getElementById('upload-form').addEventListener('submit', handleUpload);
+        document.getElementById('interactive_column').addEventListener('change', analyzeColumn);
+        document.getElementById('interactive_method').addEventListener('change', analyzeColumn);
+        document.getElementById('interactive_date_column').addEventListener('change', analyzeColumn);
+        document.getElementById('interactive_n').addEventListener('change', analyzeColumn);
+        document.getElementById('interactive_end_date').addEventListener('change', analyzeColumn);
+        document.getElementById('interactive_method').addEventListener('change', toggleNGroup);
+        document.getElementById('reset-btn').addEventListener('click', resetApp);
+
+        // Mostrar/ocultar grupo N según método
+        function toggleNGroup() {
+            const method = document.getElementById('interactive_method').value;
+            const nGroup = document.getElementById('n_group');
+            nGroup.style.display = (method === 'moving_average') ? 'block' : 'none';
+        }
+
+        // Manejar carga de CSV
+        function handleUpload(e) {
+            e.preventDefault();
+            const form = document.getElementById('upload-form');
+            const formData = new FormData(form);
+            
+            showLoading();
+            
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/', true);
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    csvLoaded = true;
+                    document.getElementById('upload-form').style.display = 'none';
+                    document.getElementById('controls-section').style.display = 'block';
+                    document.getElementById('results-section').style.display = 'block';
+                    
+                    // Obtener columnas desde el API
+                    fetch('/api/get-columns')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.columns) {
+                                columnsAvailable = data.columns;
+                                populateSelects(columnsAvailable);
+                                
+                                // Realizar análisis inicial
+                                const method = document.getElementById('initial_method').value;
+                                document.getElementById('interactive_method').value = method;
+                                analyzeColumn();
+                            } else {
+                                hideLoading();
+                                showError('Error al obtener columnas: ' + (data.error || 'unknown error'));
+                            }
+                        })
+                        .catch(error => {
+                            hideLoading();
+                            showError('Error al conectar: ' + error.message);
+                        });
+                } else {
+                    hideLoading();
+                    showError('Error al cargar el archivo');
+                }
+            };
+            
+            xhr.onerror = function() {
+                hideLoading();
+                showError('Error al cargar el archivo');
+            };
+            
+            xhr.send(formData);
+        }
+
+        // Poblar selects con columnas disponibles
+        function populateSelects(columns) {
+            const columnSelect = document.getElementById('interactive_column');
+            const dateSelect = document.getElementById('interactive_date_column');
+            
+            // Limpiar opciones
+            columnSelect.innerHTML = '<option value="">Seleccione una columna</option>';
+            dateSelect.innerHTML = '<option value="">Sin columna de fecha</option>';
+            
+            let dateColumnFound = null;
+            columns.forEach(col => {
+                const opt1 = document.createElement('option');
+                opt1.value = col;
+                opt1.textContent = col;
+                columnSelect.appendChild(opt1);
+                
+                const opt2 = document.createElement('option');
+                opt2.value = col;
+                opt2.textContent = col;
+                dateSelect.appendChild(opt2);
+                
+                // Detectar columnas que podrían ser fechas por su nombre
+                if (!dateColumnFound && (col.toLowerCase().includes('fecha') || col.toLowerCase().includes('date') || col.toLowerCase().includes('time'))) {
+                    dateColumnFound = col;
+                }
+            });
+            
+            // Seleccionar primera columna por defecto
+            if (columns.length > 0) {
+                columnSelect.value = columns[0];
+                // Si se encontró columna de fecha, seleccionarla
+                if (dateColumnFound) {
+                    dateSelect.value = dateColumnFound;
+                }
+            }
+            
+            // Establecer fecha de proyección futura (30 días adelante)
+            const today = new Date();
+            const futureDate = new Date(today);
+            futureDate.setDate(futureDate.getDate() + 30);
+            const futureDateStr = futureDate.toISOString().split('T')[0];
+            document.getElementById('interactive_end_date').value = futureDateStr;
+        }
+
+        // Analizar columna seleccionada (AJAX)
+        function analyzeColumn() {
+            if (!csvLoaded) return;
+            
+            const column = document.getElementById('interactive_column').value;
+            if (!column) return;
+            
+            const method = document.getElementById('interactive_method').value;
+            const dateColumn = document.getElementById('interactive_date_column').value;
+            const endDate = document.getElementById('interactive_end_date').value;
+            const n = document.getElementById('interactive_n').value;
+            
+            showLoading();
+            
+            // Limpiar errores anteriores
+            const errorAlerts = document.querySelectorAll('#results-section .alert-danger');
+            errorAlerts.forEach(alert => alert.remove());
+            
+            fetch('/api/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    column: column,
+                    method: method,
+                    date_column: dateColumn,
+                    end_date: endDate,
+                    n: n
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.error) {
+                    showError(data.error);
+                } else {
+                    displayResults(data);
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showError('Error al procesar: ' + error.message);
+            });
+        }
+
+        // Mostrar resultados
+        function displayResults(data) {
+            // Información
+            let infoHtml = `
+                <strong>Método:</strong> ${data.selected_method_label} | 
+                <strong>Columna:</strong> ${data.selected_column}
+            `;
+            if (data.date_column) {
+                infoHtml += ` | <strong>Fecha:</strong> ${data.date_column}`;
+                if (data.date_column_type && data.date_column_type.is_date) {
+                    infoHtml += ` <span class="badge badge-info">${data.date_column_type.message}</span>`;
+                }
+            }
+            document.getElementById('result-info').innerHTML = infoHtml;
+            
+            // Tabla resumen
+            document.getElementById('summary-table').innerHTML = data.summary_table;
+            
+            // Título del gráfico
+            document.getElementById('selected-plot-title').textContent = 
+                `Gráfico Seleccionado (${data.selected_method_label})`;
+            
+            // Gráfico seleccionado
+            if (data.plot_image_selected) {
+                document.getElementById('plot-image-selected').src = 
+                    'data:image/png;base64,' + data.plot_image_selected;
+            }
+            
+            // Otros gráficos
+            let otherPlotsHtml = '';
+            for (let methodName in data.plot_image_others) {
+                otherPlotsHtml += `
+                    <div class="mb-4">
+                        <h5>${methodName}</h5>
+                        <img src="data:image/png;base64,${data.plot_image_others[methodName]}" 
+                             class="img-fluid" alt="Gráfico de ${methodName}" style="max-width: 100%; height: auto;">
+                    </div>
+                `;
+            }
+            document.getElementById('other-plots-section').innerHTML = otherPlotsHtml ? 
+                '<h3 style="margin-top: 40px;">Gráficas de Métodos Adicionales</h3>' + otherPlotsHtml : '';
+            
+            // Tabla de pronóstico
+            document.getElementById('forecast-table').innerHTML = data.forecast_table;
+        }
+
+        // Mostrar/ocultar indicador de carga
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // Mostrar error
+        function showError(message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            `;
+            document.getElementById('results-section').insertBefore(
+                alertDiv, 
+                document.getElementById('result-info')
+            );
+        }
+
+        // Resetear aplicación
+        function resetApp() {
+            csvLoaded = false;
+            columnsAvailable = [];
+            document.getElementById('upload-form').style.display = 'block';
+            document.getElementById('controls-section').style.display = 'none';
+            document.getElementById('results-section').style.display = 'none';
+            document.getElementById('csv_file').value = '';
+            document.getElementById('upload-form').reset();
+        }
+
+        // Inicialisazion
+        {% if results %}
+            csvLoaded = true;
+            columnsAvailable = {{ results.columns | tojson }};
+            document.getElementById('upload-form').style.display = 'none';
+            document.getElementById('controls-section').style.display = 'block';
+            document.getElementById('results-section').style.display = 'block';
+            populateSelects(columnsAvailable);
+            document.getElementById('interactive_column').value = '{{ results.selected_column }}';
+            document.getElementById('interactive_method').value = '{{ results.selected_method }}';
+            document.getElementById('interactive_date_column').value = '{{ results.date_column or "" }}';
+            document.getElementById('interactive_n').value = '{{ results.n or 3 }}';
+            document.getElementById('interactive_end_date').value = '{{ results.end_date or "" }}';
+            toggleNGroup();
+            displayResults({{ results | tojson }});
+        {% endif %}
+    </script>
 </body>
 </html>
